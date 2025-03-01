@@ -1,0 +1,12 @@
+{
+    "server": "5tw.prometheusnet01.xyz:50622",
+    "auth": "24ad7250-715f-4a96-9cfd-8ef98972ab29",
+    "tls": {
+        "insecure": true
+    },
+    "transport": {},
+    "http": {
+        "listen": "127.0.0.1:8109"
+    },
+    "name": "🇨🇳5台湾-联通/移动(hy2)"
+}
