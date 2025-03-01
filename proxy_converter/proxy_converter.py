@@ -12,8 +12,6 @@ import json
 import asyncio
 from typing import Dict, Any, List
 
-from .utils.network import is_port_in_use
-
 
 class ProxyConverter:
     """代理转换器，用于从 YAML 文件中提取代理信息并建立连接"""
