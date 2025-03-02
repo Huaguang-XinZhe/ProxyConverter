@@ -39,7 +39,7 @@ class ProcessManager:
             进程信息
         """
         # 构建命令
-        cmd = [self.executable, "client", "-c", config_file]
+        cmd = [self.executable, "client", "-c", config_file, "--log-level", "debug"]
         
         print(f"启动 {os.path.basename(config_file)} 的 Hysteria2 客户端...")
         # 从配置中获取 HTTP 监听地址
@@ -47,26 +47,30 @@ class ProcessManager:
         print(f"HTTP 代理: {http_listen}")
         print(f"服务器: {config.get('server', 'Unknown')}")
         
-        # 使用真正的异步进程创建
-        process = await asyncio.create_subprocess_exec(
-            *cmd,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-            start_new_session=True  # 确保在新的会话中启动
-        )
-        
-        # 创建进程信息
-        process_info = {
-            "process": process,
-            "config_file": config_file,
-            "port": port
-        }
-        
-        # 添加到进程列表
-        self.processes.append(process_info)
-        
-        # 返回进程信息
-        return process_info
+        try:
+            # 使用真正的异步进程创建
+            process = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+                start_new_session=True  # 确保在新的会话中启动
+            )
+            
+            # 创建进程信息
+            process_info = {
+                "process": process,
+                "config_file": config_file,
+                "port": port
+            }
+            
+            # 添加到进程列表
+            self.processes.append(process_info)
+            
+            # 返回进程信息
+            return process_info
+        except Exception as e:
+            print(f"启动进程时发生错误: {e}")
+            raise
     
     async def check_processes_status(self, future: asyncio.Future) -> None:
         """周期性检查进程状态
@@ -79,7 +83,27 @@ class ProcessManager:
                 # 检查进程状态
                 for process_info in self.processes[:]:
                     if process_info["process"].returncode is not None:
-                        print(f"{os.path.basename(process_info['config_file'])} 进程已退出，退出码: {process_info['process'].returncode}")
+                        process = process_info["process"]
+                        config_file = os.path.basename(process_info['config_file'])
+                        print(f"{config_file} 进程已退出，退出码: {process.returncode}")
+                        
+                        # 尝试读取进程的输出信息
+                        try:
+                            stdout_data, stderr_data = await asyncio.gather(
+                                process.stdout.read(),
+                                process.stderr.read()
+                            )
+                            
+                            stdout_str = stdout_data.decode('utf-8', errors='replace').strip()
+                            stderr_str = stderr_data.decode('utf-8', errors='replace').strip()
+                            
+                            if stdout_str:
+                                print(f"{config_file} 标准输出:\n{stdout_str}")
+                            if stderr_str:
+                                print(f"{config_file} 标准错误:\n{stderr_str}")
+                        except Exception as e:
+                            print(f"无法读取进程输出信息: {e}")
+                        
                         self.processes.remove(process_info)
                 
                 if not self.processes:

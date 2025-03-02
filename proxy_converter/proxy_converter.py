@@ -69,13 +69,11 @@ class ProxyConverter:
         
         # 取 server 名的前部分作为文件名
         server_prefix = proxy.get('server', 'unknown').split('.')[0]
-        filename = f"{server_prefix}.json"
+        filename = f"{server_prefix}-{port}.json"
         filepath = os.path.join(output_dir, filename)
         
         # 获取节点名称，优先使用配置中的 name
         name = proxy.get('name', server_prefix)
-        
-        # 直接使用传入的预分配端口
         
         # 创建配置
         config = {
@@ -131,6 +129,9 @@ class ProxyConverter:
         start_port = 8080
         ports = [start_port + i for i in range(len(proxies))]
         
+        # 保存端口范围到根目录
+        self._save_port_range(start_port, start_port + len(proxies) - 1)
+        
         # 使用并发方式生成配置文件，传入预分配的端口
         tasks = []
         for i, proxy in enumerate(proxies):
@@ -144,3 +145,19 @@ class ProxyConverter:
         
         print(f"已生成 {len(config_files)} 个配置文件")
         return config_files
+        
+    def _save_port_range(self, start_port: int, end_port: int) -> None:
+        """保存端口范围到根目录
+        
+        Args:
+            start_port: 起始端口
+            end_port: 结束端口
+        """
+        ports_file = "proxy_ports.txt"
+        
+        try:
+            with open(ports_file, 'w', encoding='utf-8') as f:
+                f.write(f"{start_port}-{end_port}")
+            print(f"端口范围已保存到: {ports_file}")
+        except Exception as e:
+            print(f"保存端口范围时出错: {e}")

@@ -10,6 +10,5 @@ __version__ = "1.0.0"
 
 from .proxy_converter import ProxyConverter
 from .hysteria2.client import Hysteria2Client
-from .api_server import ProxyAPIServer
 
-__all__ = ["ProxyConverter", "Hysteria2Client", "ProxyAPIServer"]
+__all__ = ["ProxyConverter", "Hysteria2Client"]

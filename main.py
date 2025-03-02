@@ -8,115 +8,160 @@
 import argparse
 import asyncio
 import os
+import random
+import re
 
 from proxy_converter.proxy_converter import ProxyConverter
 from proxy_converter.hysteria2.client import Hysteria2Client
-from proxy_converter.api_server import ProxyAPIServer
+
+
+def find_config_files_by_ports(config_dir: str, ports: list) -> list:
+    """根据端口列表查找对应的配置文件
+    
+    Args:
+        config_dir: 配置文件目录
+        ports: 端口列表
+        
+    Returns:
+        匹配的配置文件名列表
+    """
+    if not os.path.exists(config_dir):
+        print(f"配置目录 {config_dir} 不存在")
+        return []
+    
+    # 获取目录中所有配置文件
+    config_files = [f for f in os.listdir(config_dir) if f.endswith('.json')]
+    
+    # 匹配端口号的正则表达式
+    port_pattern = re.compile(r'-(\d+)\.json$')
+    
+    # 存储匹配的配置文件
+    matched_files = []
+    
+    # 遍历所有配置文件，检查文件名中的端口号是否在端口列表中
+    for file in config_files:
+        match = port_pattern.search(file)
+        if match:
+            file_port = int(match.group(1))
+            if file_port in ports:
+                matched_files.append(os.path.basename(file))
+    
+    return matched_files
 
 
 async def main():
     """主函数"""
     parser = argparse.ArgumentParser(description="代理配置转换工具")
-    subparsers = parser.add_subparsers(dest="command", help="命令")
     
-    # 转换命令
-    convert_parser = subparsers.add_parser("convert", help="转换代理配置")
-    convert_parser.add_argument("--yaml-file", "-Y", default='./config.yaml', help="YAML 配置文件路径") # 不带两个中划线的就是必须的参数！
-    convert_parser.add_argument("--type", "-T", default="hysteria2", help="代理类型，默认为 hysteria2")
-    convert_parser.add_argument("--output-dir", "-O", default="./configs", help="配置文件输出目录，默认为 ./configs")
-    
-    # 连接命令
-    connect_parser = subparsers.add_parser("connect", help="连接代理")
-    connect_parser.add_argument("-C", "--config", default='./configs/1hk.json', help="单个配置文件路径")
-    connect_parser.add_argument("-D", "--config-dir", default='./configs', help="配置文件目录，用于批量连接")
-    connect_parser.add_argument("-E", "--executable", help="Hysteria2 可执行文件路径")
-    connect_parser.add_argument("-B", "--batch", action="store_true", help="批量连接模式")
-    connect_parser.add_argument("-L", "--limit", type=int, default=0, help="限制批量连接的配置文件数量，0 表示不限制")
-    connect_parser.add_argument("-F", "--filter", type=str, help="过滤配置文件的模式")
-    connect_parser.add_argument("-M", "--max-parallel", type=int, default=0, help="最大并发连接数，0 表示不限制")
-    connect_parser.add_argument("-H", "--host", default="127.0.0.1", help="API 服务监听主机")
-    connect_parser.add_argument("-P", "--port", type=int, default=8000, help="API 服务监听端口")
-    
-    # API 服务命令
-    api_parser = subparsers.add_parser("api", help="启动 API 服务")
-    api_parser.add_argument("-D", "--config-dir", default='./configs', help="配置文件目录")
-    api_parser.add_argument("-H", "--host", default="127.0.0.1", help="监听主机")
-    api_parser.add_argument("-P", "--port", type=int, default=8000, help="监听端口")
+    # 基本参数
+    parser.add_argument("--yaml-file", "-Y", 
+                        default="C:\\Users\\24750\\AppData\\Roaming\\io.github.clash-verge-rev.clash-verge-rev\\profiles\\RNxaxXM4uPWP.yaml", 
+                        help="YAML 配置文件路径")
+    parser.add_argument("--type", "-T", default="hysteria2", help="代理类型，默认为 hysteria2")
+    parser.add_argument("--output-dir", "-O", default="./configs", help="配置文件输出目录，默认为 ./configs")
+    parser.add_argument("--count", "-C", type=int, default=5, help="随机选择的代理数量，默认为 5")
+    parser.add_argument("--executable", "-E", help="Hysteria2 可执行文件路径")
+    parser.add_argument("--filter", "-F", help="配置文件过滤模式，支持正则表达式或以 | 分隔的多个文件名")
     
     args = parser.parse_args()
     
-    if args.command == "convert":
-        # 转换命令
-        converter = ProxyConverter(args.yaml_file)
-        await converter.generate_all_configs(args.type, args.output_dir)
-    elif args.command == "connect":
-        # 连接命令
-        client = None
+    # 步骤 1：转换代理配置
+    print("步骤 1: 正在转换代理配置...")
+    converter = ProxyConverter(args.yaml_file)
+    config_files = await converter.generate_all_configs(args.type, args.output_dir)
+    if not config_files:
+        print("未能生成有效的代理配置文件，程序退出")
+        return
+    
+    # 如果指定了过滤模式，则直接使用过滤模式连接
+    if args.filter:
+        print(f"使用指定的过滤模式: {args.filter}")
         
-        if args.batch:
-            # 批量连接模式
-            client = Hysteria2Client(config_dir=args.config_dir, executable=args.executable)
-            await client.batch_connect(
-                limit=args.limit, 
-                filter_pattern=args.filter,
-                max_parallel=args.max_parallel
-            )
-            
-            
-            print(f"正在启动 API 服务...")
-            # 创建 API 服务器但不等待
-            api_task = asyncio.create_task(
-                start_api_server(args.config_dir, args.host, args.port)
-            )
-            
-            try:
-                await asyncio.sleep(0.1) # 让 API 的日志先打印
-                # 等待用户中断
-                await client.wait_for_interrupt()
-            finally:
-                # 取消 API 任务
-                if not api_task.done():
-                    api_task.cancel()
-                    try:
-                        await api_task
-                    except asyncio.CancelledError:
-                        pass
-        else:
-            # 单个连接模式 - 使用批量连接方法，但只指定一个配置文件名
-            # 创建一个临时的 select 列表，只包含指定的配置文件名
-            config_filename = os.path.basename(args.config)
-            
-            # 使用批量连接方法，但只选择一个配置文件
-            client = Hysteria2Client(config_dir=os.path.dirname(args.config), executable=args.executable)
-            await client.batch_connect(
-                limit=1,
-                filter_pattern=config_filename
-            )
+        # 创建 Hysteria2 客户端
+        client = Hysteria2Client(config_dir=args.output_dir, executable=args.executable)
+        
+        try:
+            # 批量连接代理
+            print("\n正在建立连接...")
+            await client.batch_connect(filter_pattern=args.filter)
             
             # 等待用户中断
             await client.wait_for_interrupt()
-    elif args.command == "api":
-        # 启动 API 服务
-        await start_api_server(args.config_dir, args.host, args.port)
+        except Exception as e:
+            print(f"连接代理时出错: {e}")
+        finally:
+            # 清理资源
+            await client.cleanup()
+        
+        return
+    
+    # 步骤 2：从保存的端口范围文件中读取端口信息
+    print("步骤 2: 正在读取端口范围...")
+    ports_file = "proxy_ports.txt"
+    
+    if not os.path.exists(ports_file):
+        print(f"端口范围文件 {ports_file} 不存在，程序退出")
+        return
+    
+    try:
+        with open(ports_file, 'r', encoding='utf-8') as f:
+            port_range = f.read().strip()
+            start_port, end_port = map(int, port_range.split('-'))
+            available_ports = list(range(start_port, end_port + 1))
+    except Exception as e:
+        print(f"读取端口范围文件时出错: {e}")
+        return
+    
+    if not available_ports:
+        print("可用端口列表为空，程序退出")
+        return
+    
+    # 步骤 3：随机选择指定数量的端口
+    print(f"步骤 3: 正在随机选择 {args.count} 个端口...")
+    
+    # 如果要选择的数量大于可用端口数量，则使用所有端口
+    if args.count >= len(available_ports):
+        selected_ports = available_ports
     else:
-        parser.print_help()
-
-
-async def start_api_server(config_dir, host, port):
-    """启动 API 服务器
-
-    Args:
-        config_dir: 配置文件目录
-        host: 监听主机
-        port: 监听端口
-    """
-    api_server = ProxyAPIServer(
-        config_dir=config_dir,
-        host=host,
-        port=port
-    )
-    print(f"正在启动 API 服务，监听地址: http://{host}:{port}")
-    await api_server.start()
+        # 随机选择端口
+        selected_ports = random.sample(available_ports, args.count)
+    
+    if not selected_ports:
+        print("未能选择到有效端口，程序退出")
+        return
+    
+    # 打印选择的端口
+    print("\n随机选择的代理地址:")
+    for port in selected_ports:
+        print(f"127.0.0.1:{port}")
+    
+    # 步骤 4：建立连接
+    print("\n步骤 4: 正在建立连接...")
+    
+    # 创建 Hysteria2 客户端
+    client = Hysteria2Client(config_dir=args.output_dir, executable=args.executable)
+    
+    try:
+        # 根据选择的端口查找对应的配置文件
+        selected_config_files = find_config_files_by_ports(args.output_dir, selected_ports)
+        
+        if not selected_config_files:
+            print("未找到对应的配置文件，程序退出")
+            return
+        
+        # 批量连接代理，使用精确匹配模式
+        # 将文件名列表转换为 | 分隔的字符串，用于精确匹配
+        filter_pattern = "|".join(selected_config_files)
+        print(f"使用过滤器: {filter_pattern}")
+        await client.batch_connect(filter_pattern=filter_pattern)
+        
+        # 等待用户中断
+        await client.wait_for_interrupt()
+    except Exception as e:
+        print(f"连接代理时出错: {e}")
+    finally:
+        # 清理资源
+        await client.cleanup()
 
 
 if __name__ == "__main__":

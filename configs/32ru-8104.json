@@ -1,0 +1,12 @@
+{
+    "server": "32ru.prometheusnet01.xyz:22878",
+    "auth": "24ad7250-715f-4a96-9cfd-8ef98972ab29",
+    "tls": {
+        "insecure": true
+    },
+    "transport": {},
+    "http": {
+        "listen": "127.0.0.1:8104"
+    },
+    "name": "🇷🇺32俄罗斯-全网优化(hy2)"
+}

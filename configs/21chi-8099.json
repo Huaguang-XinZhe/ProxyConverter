@@ -1,0 +1,12 @@
+{
+    "server": "21chi.prometheusnet01.xyz:25809",
+    "auth": "24ad7250-715f-4a96-9cfd-8ef98972ab29",
+    "tls": {
+        "insecure": true
+    },
+    "transport": {},
+    "http": {
+        "listen": "127.0.0.1:8099"
+    },
+    "name": "🇨🇱21智利-全网优化(hy2)"
+}
